@@ -7,6 +7,9 @@ var BCLS = (function(window, document) {
     videoData,
     policy_key_input = document.getElementById("policy_key_input"),
     playlist_id_input = document.getElementById("playlist_id_input"),
+    siteURL = document.getElementById('siteURL'),
+    feedURL = document.getElementById('feedURL'),
+    feedDescription = document.getElementById('feedDescription'),
     account_id,
     policyKey,
     playlist_id,
@@ -14,11 +17,13 @@ var BCLS = (function(window, document) {
     // the next three lines are the ones that need to be changed
     account_id_default = "1752604059001",
     policyKey_default =
-      "BCpkADawqM3_9ax216PJYuUTLApMLkLJ3apjFlTRKHHS4q0DE33J0XsiDWmc6SfKwrwRAhejCZpTbwljz4-OlUwyqKi64L25Dwy4yhY1eSZ9ZduI-dO0mjSNVcR9C8nz0jtkimOOtzQgswCr",
+    "BCpkADawqM3_9ax216PJYuUTLApMLkLJ3apjFlTRKHHS4q0DE33J0XsiDWmc6SfKwrwRAhejCZpTbwljz4-OlUwyqKi64L25Dwy4yhY1eSZ9ZduI-dO0mjSNVcR9C8nz0jtkimOOtzQgswCr",
     playlist_id_default = "5492280057001",
     // vars for MRSS generation
     mrssStr =
-      '<rss version="2.0"  xmlns:media="http://search.yahoo.com/mrss/">',
+    '<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:georss="http://www.georss.org/georss" xmlns:gml="http://www.opengis.net/gml" xmlns:atom="http://www.w3.org/2005/Atom">',
+    sCdata = '<![CDATA[',
+    eCdata = ']]>',
     sChannel = "<channel>",
     eChannel = "</channel>",
     sTitle = "<title>",
@@ -31,16 +36,18 @@ var BCLS = (function(window, document) {
     eLink = "</link>",
     sPubDate = "<pubDate>",
     ePubDate = "</pubDate>",
+    sGuid = '<guid isPermaLink="false">',
+    eGuid = '</guid>',
     sMediaContent = "<media:content",
-    eMediaContent = "</media:content>",
+    eMediaContent = " />",
     sMediaPlayer = "<media:player",
-    eMediaPlayer = "/>",
-    sMediaDescription = "<media:description>",
-    eMediaDescription = "</media:description>",
+    eMediaPlayer = " />",
+    sMediaDescription = "<description>",
+    eMediaDescription = "</description>",
     sMediaThumbnail = "<media:thumbnail",
     eMediaThumbnail = "/>",
-    sMediaTitle = "<media:title>",
-    eMediaTitle = "</media:title>";
+    sMediaTitle = "<title>",
+    eMediaTitle = "</title>";
 
   // event listeners for the buttons
   showJSON.addEventListener("click", function() {
@@ -76,9 +83,7 @@ var BCLS = (function(window, document) {
     if (!isDefined(videoData)) {
       // check inputs to see if we use those or default values
       if (
-        isDefined(account_id_input.value) &&
-        isDefined(policy_key_input.value) &&
-        isDefined(playlist_id_input.value)
+        isDefined(account_id_input.value) && isDefined(policy_key_input.value) && isDefined(playlist_id_input.value)
       ) {
         account_id = removeSpaces(account_id_input.value);
         policyKey = removeSpaces(policy_key_input.value);
@@ -201,23 +206,24 @@ var BCLS = (function(window, document) {
       doThumbnail = true;
     if (videoData.length > 0) {
       mrssStr += sChannel;
-      mrssStr += "<title>" + feedname + "</title>";
+      mrssStr += '<atom:link href="' + feedURL.value.replace(/&/g, '&amp;') + '" rel="self" type="application/rss+xml" />';
+      mrssStr += sTitle + feedname + eTitle;
+      mrssStr += sDescription + sCdata + feedDescription.value + eCdata + eDescription;
+      mrssStr += sLink + siteURL.value.replace(/&/g, "&amp;") + eLink;
       iMax = videoData.length;
       for (i = 0; i < iMax; i += 1) {
+        doThumbnail = true;
         video = videoData[i];
-        
+
         // video may not have a valid source
         if (isDefined(video.source) && isDefined(video.source.src)) {
-          videoURL = encodeURI(video.source.src.replace(/&/g, "&amp;"));
+          videoURL = video.source.src.replace(/&/g, "&amp;");
         } else {
-          videoURL = "";
+          // no source; skip this videos
+          continue;
         }
         // depending on when/how the video was created, it may have different thumbnail properties or none at all
-        if (isDefined(video.images) && isDefined(video.images.thumbnail)) {
-          thumbnailURL = encodeURI(
-            video.images.thumbnail.sources[0].src.replace(/&/g, "&amp;")
-          );
-        } else if (isDefined(video.thumbnail)) {
+        if (isDefined(video.thumbnail)) {
           thumbnailURL = encodeURI(video.thumbnail.replace(/&/g, "&amp;"));
         } else {
           doThumbnail = false;
@@ -233,6 +239,7 @@ var BCLS = (function(window, document) {
           video.id +
           eLink;
         mrssStr += sPubDate + pubdate + ePubDate;
+        mrssStr += sGuid + video.id + eGuid;
         mrssStr +=
           sMediaContent +
           ' url="' +
@@ -245,7 +252,7 @@ var BCLS = (function(window, document) {
           video.source.height +
           '" width="' +
           video.source.width +
-          '">';
+          '"' + eMediaContent;
         mrssStr +=
           sMediaPlayer +
           ' url="' +
@@ -256,7 +263,7 @@ var BCLS = (function(window, document) {
           '"' +
           eMediaPlayer;
         mrssStr += sMediaTitle + video.name + eMediaTitle;
-        mrssStr += sMediaDescription + video.description + eMediaDescription;
+        mrssStr += sMediaDescription + sCdata + video.description + eCdata + eMediaDescription;
         if (doThumbnail) {
           mrssStr += sMediaThumbnail + ' url="' + thumbnailURL + '"';
           if (isDefined(video.images)) {
@@ -272,7 +279,6 @@ var BCLS = (function(window, document) {
           }
         }
         mrssStr += eItem;
-        mrssStr += eMediaContent;
       }
       mrssStr += eChannel + "</rss>";
       feed.textContent = vkbeautify.xml(mrssStr);
@@ -291,11 +297,11 @@ var BCLS = (function(window, document) {
       responseData,
       parsedData,
       requestURL =
-        "https://edge.api.brightcove.com/playback/v1/accounts/" +
-        account_id +
-        "/playlists/" +
-        playlist_id +
-        "?limit=100";
+      "https://edge.api.brightcove.com/playback/v1/accounts/" +
+      account_id +
+      "/playlists/" +
+      playlist_id +
+      "?limit=100";
     // response handler
     getResponse = function() {
       try {
@@ -313,7 +319,7 @@ var BCLS = (function(window, document) {
           } else {
             alert(
               "There was a problem with the request. Request returned " +
-                httpRequest.status
+              httpRequest.status
             );
           }
         }
